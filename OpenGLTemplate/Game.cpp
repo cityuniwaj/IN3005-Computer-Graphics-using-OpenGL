@@ -42,6 +42,7 @@ Source code drawn from a number of sources and examples, including contributions
 #include "Audio.h"
 
 #include "CatmullRom.h"
+#include "Cube.h"
 
 // Constructor
 Game::Game()
@@ -57,6 +58,7 @@ Game::Game()
 	m_pHighResolutionTimer = NULL;
 	m_pAudio = NULL;
 	m_pCatmullRom = NULL;
+	m_pCube = NULL;
 
 	m_dt = 0.0;
 	m_framesPerSecond = 0;
@@ -77,6 +79,7 @@ Game::~Game()
 	delete m_pSphere;
 	delete m_pAudio;
 	delete m_pCatmullRom;
+	delete m_pCube;
 
 	if (m_pShaderPrograms != NULL) {
 		for (unsigned int i = 0; i < m_pShaderPrograms->size(); i++)
@@ -106,6 +109,7 @@ void Game::Initialise()
 	m_pSphere = new CSphere;
 	m_pAudio = new CAudio;
 	m_pCatmullRom = new CCatmullRom;
+	m_pCube = new CCube;
 
 	// Catmull-Rom spline path
 	glm::vec3 p0 = glm::vec3(-500.0f, 10.0f, -200.0f);
@@ -185,6 +189,9 @@ void Game::Initialise()
 	m_pAudio->LoadEventSound("resources\\Audio\\Boing.wav");					// Royalty free sound from freesound.org
 	m_pAudio->LoadMusicStream("resources\\Audio\\DST-Garote.mp3");	// Royalty free music from http://www.nosoapradio.us/
 	m_pAudio->PlayMusicStream();
+
+	// Create a cube
+	m_pCube->Create("resources\\textures\\", "dirtpile01.jpg");
 }
 
 // Render method runs repeatedly in a loop
@@ -345,6 +352,15 @@ void Game::Render()
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		m_pCatmullRom->RenderPath();
+	modelViewMatrixStack.Pop();
+
+	// Render the cube
+	modelViewMatrixStack.Push();
+		modelViewMatrixStack.Translate(glm::vec3(25.0f, 5.0f, 100.0f));
+		modelViewMatrixStack.Scale(5.0f);
+		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		m_pCube->Render();
 	modelViewMatrixStack.Pop();
 		
 	// Draw the 2D graphics after the 3D graphics
