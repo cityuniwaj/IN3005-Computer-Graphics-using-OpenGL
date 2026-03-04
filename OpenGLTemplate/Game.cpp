@@ -42,6 +42,7 @@ Source code drawn from a number of sources and examples, including contributions
 #include "Audio.h"
 
 #include "CatmullRom.h"
+#include "Cube.h"
 
 // Constructor
 Game::Game()
@@ -57,11 +58,13 @@ Game::Game()
 	m_pHighResolutionTimer = NULL;
 	m_pAudio = NULL;
 	m_pCatmullRom = NULL;
+	m_pCube = NULL;
 
 	m_dt = 0.0;
 	m_framesPerSecond = 0;
 	m_frameCount = 0;
 	m_elapsedTime = 0.0f;
+	m_t = 0.0f;
 }
 
 // Destructor
@@ -77,6 +80,7 @@ Game::~Game()
 	delete m_pSphere;
 	delete m_pAudio;
 	delete m_pCatmullRom;
+	delete m_pCube;
 
 	if (m_pShaderPrograms != NULL) {
 		for (unsigned int i = 0; i < m_pShaderPrograms->size(); i++)
@@ -106,12 +110,13 @@ void Game::Initialise()
 	m_pSphere = new CSphere;
 	m_pAudio = new CAudio;
 	m_pCatmullRom = new CCatmullRom;
+	m_pCube = new CCube;
 
 	// Catmull-Rom spline path
-	glm::vec3 p0 = glm::vec3(-500.0f, 10.0f, -200.0f);
-	glm::vec3 p1 = glm::vec3(0.0f, 10.0f, -200.0f);
-	glm::vec3 p2 = glm::vec3(0.0f, 10.0f, 200.0f);
-	glm::vec3 p3 = glm::vec3(-500.0f, 10.0f, 200.0f);
+	glm::vec3 p0 = glm::vec3(25.0f, 20.0f, 130.0f);
+	glm::vec3 p1 = glm::vec3(55.0f, 20.0f, 100.0f);
+	glm::vec3 p2 = glm::vec3(25.0f, 20.0f, 70.0f);
+	glm::vec3 p3 = glm::vec3(-5.0f, 20.0f, 100.0f);
 	m_pCatmullRom->CreatePath(p0, p1, p2, p3);
 
 	RECT dimensions = m_gameWindow.GetDimensions();
@@ -130,6 +135,9 @@ void Game::Initialise()
 	sShaderFileNames.push_back("mainShader.frag");
 	sShaderFileNames.push_back("textShader.vert");
 	sShaderFileNames.push_back("textShader.frag");
+
+	sShaderFileNames.push_back("cubeShader.vert");
+	sShaderFileNames.push_back("cubeShader.frag");
 
 	for (int i = 0; i < (int) sShaderFileNames.size(); i++) {
 		string sExt = sShaderFileNames[i].substr((int) sShaderFileNames[i].size()-4, 4);
@@ -160,6 +168,14 @@ void Game::Initialise()
 	pFontProgram->LinkProgram();
 	m_pShaderPrograms->push_back(pFontProgram);
 
+	// Create a shader program for the cube
+	CShaderProgram* pCubeProgram = new CShaderProgram;
+	pCubeProgram->CreateProgram();
+	pCubeProgram->AddShaderToProgram(&shShaders[4]);
+	pCubeProgram->AddShaderToProgram(&shShaders[5]);
+	pCubeProgram->LinkProgram();
+	m_pShaderPrograms->push_back(pCubeProgram);
+
 	// You can follow this pattern to load additional shaders
 
 	// Create the skybox
@@ -185,6 +201,9 @@ void Game::Initialise()
 	m_pAudio->LoadEventSound("resources\\Audio\\Boing.wav");					// Royalty free sound from freesound.org
 	m_pAudio->LoadMusicStream("resources\\Audio\\DST-Garote.mp3");	// Royalty free music from http://www.nosoapradio.us/
 	m_pAudio->PlayMusicStream();
+
+	// Create a cube
+	m_pCube->Create("resources\\textures\\", "pog.jpg");
 }
 
 // Render method runs repeatedly in a loop
@@ -346,7 +365,29 @@ void Game::Render()
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		m_pCatmullRom->RenderPath();
 	modelViewMatrixStack.Pop();
-		
+
+	// Render the cube
+	CShaderProgram* pCubeProgram = (*m_pShaderPrograms)[2];
+	pCubeProgram->UseProgram();
+	pCubeProgram->SetUniform("bUseTexture", true);
+	pCubeProgram->SetUniform("sampler0", 0);
+	pCubeProgram->SetUniform("matrices.projMatrix", m_pCamera->GetPerspectiveProjectionMatrix());
+	pCubeProgram->SetUniform("light1.position", viewMatrix * glm::vec4(-100, 100, -100, 1));
+	pCubeProgram->SetUniform("light1.La", glm::vec3(0.2f));
+	pCubeProgram->SetUniform("light1.Ld", glm::vec3(1.0f));
+	pCubeProgram->SetUniform("light1.Ls", glm::vec3(1.0f, 1.0f, 0.0f));
+	pCubeProgram->SetUniform("material1.Ma", glm::vec3(0.2f));
+	pCubeProgram->SetUniform("material1.Md", glm::vec3(0.8f));
+	pCubeProgram->SetUniform("material1.Ms", glm::vec3(1.0f));
+	pCubeProgram->SetUniform("material1.shininess", 200.0f);
+	modelViewMatrixStack.Push();
+		modelViewMatrixStack.Translate(glm::vec3(25.0f, 5.0f, 100.0f));
+		modelViewMatrixStack.Scale(5.0f);
+		pCubeProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pCubeProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		m_pCube->Render();
+	modelViewMatrixStack.Pop();
+
 	// Draw the 2D graphics after the 3D graphics
 	DisplayFrameRate();
 
@@ -359,7 +400,7 @@ void Game::Render()
 void Game::Update() 
 {
 	// Update the camera using the amount of time that has elapsed to avoid framerate dependent motion
-	m_pCamera->Update(m_dt);
+	//m_pCamera->Update(m_dt);
 
 	//static float t = 0.0f;
 	//t += 0.0005f * (float)m_dt;
@@ -377,6 +418,32 @@ void Game::Update()
 	//m_pCamera->Set(cameraPosition, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 	//m_pCamera->Set(glm::vec3(0.0f, 300.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	
+	// Advance t along the path
+	m_t += 0.000125f * (float)m_dt;
+	if (m_t > 1.0f)
+		m_t = 0.0f;
+
+	glm::vec3 p0(25.0f, 20.0f, 130.0f);
+	glm::vec3 p1(55.0f, 20.0f, 100.0f);
+	glm::vec3 p2(25.0f, 20.0f, 70.0f);
+	glm::vec3 p3(-5.0f, 20.0f, 100.0f);
+
+	float totalT = m_t * 4.0f;
+	int segment = (int)totalT % 4;
+	float localT = totalT - (int)totalT;
+
+	glm::vec3 points[4] = { p0, p1, p2, p3 };
+	glm::vec3 a = points[(segment + 0) % 4];
+	glm::vec3 b = points[(segment + 1) % 4];
+	glm::vec3 c = points[(segment + 2) % 4];
+	glm::vec3 d = points[(segment + 3) % 4];
+
+	glm::vec3 cameraPosition = m_pCatmullRom->Interpolate(a, b, c, d, localT);
+
+	glm::vec3 cubePosition(25.0f, 5.0f, 100.0f);
+	m_pCamera->Set(cameraPosition, cubePosition, glm::vec3(0.0f, 1.0f, 0.0f));
+	
 	m_pAudio->Update();
 }
 

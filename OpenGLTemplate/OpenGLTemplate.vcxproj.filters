@@ -71,6 +71,9 @@
     <ClInclude Include="CatmullRom.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Cube.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Audio.cpp">
@@ -124,6 +127,9 @@
     <ClCompile Include="CatmullRom.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Cube.cpp">
+      <Filter>Source Files\BasicShapes</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\mainShader.frag">
@@ -136,6 +142,12 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="resources\shaders\textShader.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="cubeShader.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="cubeShader.frag">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
