@@ -64,6 +64,7 @@ Game::Game()
 	m_framesPerSecond = 0;
 	m_frameCount = 0;
 	m_elapsedTime = 0.0f;
+	m_t = 0.0f;
 }
 
 // Destructor
@@ -112,10 +113,10 @@ void Game::Initialise()
 	m_pCube = new CCube;
 
 	// Catmull-Rom spline path
-	glm::vec3 p0 = glm::vec3(-500.0f, 10.0f, -200.0f);
-	glm::vec3 p1 = glm::vec3(0.0f, 10.0f, -200.0f);
-	glm::vec3 p2 = glm::vec3(0.0f, 10.0f, 200.0f);
-	glm::vec3 p3 = glm::vec3(-500.0f, 10.0f, 200.0f);
+	glm::vec3 p0 = glm::vec3(25.0f, 20.0f, 130.0f);
+	glm::vec3 p1 = glm::vec3(55.0f, 20.0f, 100.0f);
+	glm::vec3 p2 = glm::vec3(25.0f, 20.0f, 70.0f);
+	glm::vec3 p3 = glm::vec3(-5.0f, 20.0f, 100.0f);
 	m_pCatmullRom->CreatePath(p0, p1, p2, p3);
 
 	RECT dimensions = m_gameWindow.GetDimensions();
@@ -399,7 +400,7 @@ void Game::Render()
 void Game::Update() 
 {
 	// Update the camera using the amount of time that has elapsed to avoid framerate dependent motion
-	m_pCamera->Update(m_dt);
+	//m_pCamera->Update(m_dt);
 
 	//static float t = 0.0f;
 	//t += 0.0005f * (float)m_dt;
@@ -417,6 +418,32 @@ void Game::Update()
 	//m_pCamera->Set(cameraPosition, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 	//m_pCamera->Set(glm::vec3(0.0f, 300.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	
+	// Advance t along the path
+	m_t += 0.000125f * (float)m_dt;
+	if (m_t > 1.0f)
+		m_t = 0.0f;
+
+	glm::vec3 p0(25.0f, 20.0f, 130.0f);
+	glm::vec3 p1(55.0f, 20.0f, 100.0f);
+	glm::vec3 p2(25.0f, 20.0f, 70.0f);
+	glm::vec3 p3(-5.0f, 20.0f, 100.0f);
+
+	float totalT = m_t * 4.0f;
+	int segment = (int)totalT % 4;
+	float localT = totalT - (int)totalT;
+
+	glm::vec3 points[4] = { p0, p1, p2, p3 };
+	glm::vec3 a = points[(segment + 0) % 4];
+	glm::vec3 b = points[(segment + 1) % 4];
+	glm::vec3 c = points[(segment + 2) % 4];
+	glm::vec3 d = points[(segment + 3) % 4];
+
+	glm::vec3 cameraPosition = m_pCatmullRom->Interpolate(a, b, c, d, localT);
+
+	glm::vec3 cubePosition(25.0f, 5.0f, 100.0f);
+	m_pCamera->Set(cameraPosition, cubePosition, glm::vec3(0.0f, 1.0f, 0.0f));
+	
 	m_pAudio->Update();
 }
 
