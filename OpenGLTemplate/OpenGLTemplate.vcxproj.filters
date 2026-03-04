@@ -144,5 +144,11 @@
     <None Include="resources\shaders\textShader.vert">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="cubeShader.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="cubeShader.frag">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

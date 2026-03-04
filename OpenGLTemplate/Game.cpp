@@ -135,6 +135,9 @@ void Game::Initialise()
 	sShaderFileNames.push_back("textShader.vert");
 	sShaderFileNames.push_back("textShader.frag");
 
+	sShaderFileNames.push_back("cubeShader.vert");
+	sShaderFileNames.push_back("cubeShader.frag");
+
 	for (int i = 0; i < (int) sShaderFileNames.size(); i++) {
 		string sExt = sShaderFileNames[i].substr((int) sShaderFileNames[i].size()-4, 4);
 		int iShaderType;
@@ -163,6 +166,14 @@ void Game::Initialise()
 	pFontProgram->AddShaderToProgram(&shShaders[3]);
 	pFontProgram->LinkProgram();
 	m_pShaderPrograms->push_back(pFontProgram);
+
+	// Create a shader program for the cube
+	CShaderProgram* pCubeProgram = new CShaderProgram;
+	pCubeProgram->CreateProgram();
+	pCubeProgram->AddShaderToProgram(&shShaders[4]);
+	pCubeProgram->AddShaderToProgram(&shShaders[5]);
+	pCubeProgram->LinkProgram();
+	m_pShaderPrograms->push_back(pCubeProgram);
 
 	// You can follow this pattern to load additional shaders
 
@@ -355,14 +366,27 @@ void Game::Render()
 	modelViewMatrixStack.Pop();
 
 	// Render the cube
+	CShaderProgram* pCubeProgram = (*m_pShaderPrograms)[2];
+	pCubeProgram->UseProgram();
+	pCubeProgram->SetUniform("bUseTexture", true);
+	pCubeProgram->SetUniform("sampler0", 0);
+	pCubeProgram->SetUniform("matrices.projMatrix", m_pCamera->GetPerspectiveProjectionMatrix());
+	pCubeProgram->SetUniform("light1.position", viewMatrix * glm::vec4(-100, 100, -100, 1));
+	pCubeProgram->SetUniform("light1.La", glm::vec3(0.2f));
+	pCubeProgram->SetUniform("light1.Ld", glm::vec3(1.0f));
+	pCubeProgram->SetUniform("light1.Ls", glm::vec3(1.0f, 1.0f, 0.0f));
+	pCubeProgram->SetUniform("material1.Ma", glm::vec3(0.2f));
+	pCubeProgram->SetUniform("material1.Md", glm::vec3(0.8f));
+	pCubeProgram->SetUniform("material1.Ms", glm::vec3(1.0f));
+	pCubeProgram->SetUniform("material1.shininess", 200.0f);
 	modelViewMatrixStack.Push();
 		modelViewMatrixStack.Translate(glm::vec3(25.0f, 5.0f, 100.0f));
 		modelViewMatrixStack.Scale(5.0f);
-		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
-		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		pCubeProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pCubeProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		m_pCube->Render();
 	modelViewMatrixStack.Pop();
-		
+
 	// Draw the 2D graphics after the 3D graphics
 	DisplayFrameRate();
 
