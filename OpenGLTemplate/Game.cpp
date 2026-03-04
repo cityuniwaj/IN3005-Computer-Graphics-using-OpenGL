@@ -203,7 +203,7 @@ void Game::Initialise()
 	m_pAudio->PlayMusicStream();
 
 	// Create a cube
-	m_pCube->Create("resources\\textures\\", "dirtpile01.jpg");
+	m_pCube->Create("resources\\textures\\", "pog.jpg");
 }
 
 // Render method runs repeatedly in a loop
