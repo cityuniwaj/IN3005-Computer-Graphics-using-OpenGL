@@ -65,6 +65,7 @@ Game::Game()
 	m_frameCount = 0;
 	m_elapsedTime = 0.0f;
 	m_t = 0.0f;
+	m_cameraMode = 0;
 }
 
 // Destructor
@@ -118,6 +119,28 @@ void Game::Initialise()
 	glm::vec3 p2 = glm::vec3(25.0f, 20.0f, 70.0f);
 	glm::vec3 p3 = glm::vec3(-5.0f, 20.0f, 100.0f);
 	m_pCatmullRom->CreatePath(p0, p1, p2, p3);
+
+	// === Race setup ===
+	m_baseSpeed      = 0.0001f;
+	m_boostSpeed     = 0.00022f;
+	m_playerSpeed    = m_baseSpeed;
+	m_speedDecayRate = 0.000000025f;
+	m_playerLane     = 0;
+	m_laneWidth      = 6.0f;
+
+	m_aiT[0] = 0.005f;  m_aiSpeeds[0] = 0.000130f;  m_aiLanes[0] = -2;
+	m_aiT[1] = 0.010f;  m_aiSpeeds[1] = 0.000115f;  m_aiLanes[1] = -1;
+	m_aiT[2] = 0.003f;  m_aiSpeeds[2] = 0.000125f;  m_aiLanes[2] =  1;
+	m_aiT[3] = 0.007f;  m_aiSpeeds[3] = 0.000120f;  m_aiLanes[3] =  2;
+
+	m_sequenceIndex = 0;
+	m_wrongInput    = false;
+	m_flashTimer    = 0.0f;
+	m_lapTime       = 0.0f;
+	m_racePosition  = 1;
+
+	srand((unsigned int)time(NULL));
+	GenerateSequence();
 
 	RECT dimensions = m_gameWindow.GetDimensions();
 
@@ -278,7 +301,7 @@ void Game::Render()
 
 	// Render the horse 
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(0.0f, 0.0f, 0.0f));
+		modelViewMatrixStack.Translate(glm::vec3(0.0f, 20.0f, 130.0f));
 		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), 180.0f);
 		modelViewMatrixStack.Scale(2.5f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
@@ -288,7 +311,7 @@ void Game::Render()
 
 	// horse 2
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(0.0f, 10.0f, 0.0f));
+		modelViewMatrixStack.Translate(glm::vec3(55.0f, 20.0f, 85.0f));
 		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), 180.0f);
 		modelViewMatrixStack.Scale(2.5f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
@@ -298,7 +321,7 @@ void Game::Render()
 
 	// horse 3
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(0.0f, 20.0f, 0.0f));
+		modelViewMatrixStack.Translate(glm::vec3(-5.0f, 20.0f, 115.0f));
 		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), 180.0f);
 		modelViewMatrixStack.Scale(2.5f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
@@ -306,11 +329,30 @@ void Game::Render()
 		m_pHorseMesh->Render();
 	modelViewMatrixStack.Pop();
 
+	// Draw AI horses
+	for (int i = 0; i < 4; i++) {
+		glm::vec3 aiPos = GetLanePosition(m_aiT[i], m_aiLanes[i]);
+		float tA = m_aiT[i] + 0.005f;
+		if (tA > 1.0f) tA -= 1.0f;
+		glm::vec3 aiAhead   = GetLanePosition(tA, m_aiLanes[i]);
+		glm::vec3 aiForward = glm::normalize(aiAhead - aiPos);
+		float angle = glm::degrees(atan2(aiForward.x, aiForward.z));
+
+		modelViewMatrixStack.Push();
+			modelViewMatrixStack.Translate(aiPos);
+			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), angle);
+			modelViewMatrixStack.Scale(2.5f);
+			pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+			pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+			m_pHorseMesh->Render();
+		modelViewMatrixStack.Pop();
+	}
+
 
 	
 	// Render the barrel 
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(100.0f, 0.0f, 0.0f));
+		modelViewMatrixStack.Translate(glm::vec3(40.0f, 20.0f, 100.0f));
 		modelViewMatrixStack.Scale(5.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
@@ -319,7 +361,7 @@ void Game::Render()
 
 	// barrel 2
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(90.0f, 0.0f, 0.0f));
+		modelViewMatrixStack.Translate(glm::vec3(25.0f, 20.0f, 55.0f));
 		modelViewMatrixStack.Scale(5.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
@@ -328,7 +370,7 @@ void Game::Render()
 
 	// barrel 3
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(110.0f, 0.0f, 0.0f));
+		modelViewMatrixStack.Translate(glm::vec3(10.0f, 20.0f, 100.0f));
 		modelViewMatrixStack.Scale(5.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
@@ -338,7 +380,7 @@ void Game::Render()
 
 	// Render the sphere
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(0.0f, 2.0f, 150.0f));
+		modelViewMatrixStack.Translate(glm::vec3(25.0f, 20.0f, 110.0f));
 		modelViewMatrixStack.Scale(2.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
@@ -349,8 +391,8 @@ void Game::Render()
 
 	// larger sphere
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(10.0f, 6.0f, 150.0f));
-		modelViewMatrixStack.Scale(6.0f);
+		modelViewMatrixStack.Translate(glm::vec3(45.0f, 20.0f, 100.0f));
+		modelViewMatrixStack.Scale(2.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		// To turn off texture mapping and use the sphere colour only (currently white material), uncomment the next line
@@ -396,6 +438,50 @@ void Game::Render()
 
 }
 
+void Game::GenerateSequence()
+{
+	for (int i = 0; i < 5; i++)
+		m_sequence[i] = rand() % 4; // 0=UP 1=DOWN 2=LEFT 3=RIGHT
+	m_sequenceIndex = 0;
+}
+
+glm::vec3 Game::GetLanePosition(float t, int lane)
+{
+	glm::vec3 p0(25.0f, 20.0f, 130.0f);
+	glm::vec3 p1(55.0f, 20.0f, 100.0f);
+	glm::vec3 p2(25.0f, 20.0f,  70.0f);
+	glm::vec3 p3(-5.0f, 20.0f, 100.0f);
+	glm::vec3 points[4] = { p0, p1, p2, p3 };
+
+	auto sampleSpline = [&](float sT) -> glm::vec3 {
+		float total = sT * 4.0f;
+		int seg = (int)total % 4;
+		float local = total - (int)total;
+		glm::vec3 a = points[(seg + 0) % 4];
+		glm::vec3 b = points[(seg + 1) % 4];
+		glm::vec3 c = points[(seg + 2) % 4];
+		glm::vec3 d = points[(seg + 3) % 4];
+		return m_pCatmullRom->Interpolate(a, b, c, d, local);
+	};
+
+	glm::vec3 pos = sampleSpline(t);
+	float tA = t + 0.005f;
+	if (tA > 1.0f) tA -= 1.0f;
+	glm::vec3 ahead   = sampleSpline(tA);
+	glm::vec3 forward = glm::normalize(ahead - pos);
+	glm::vec3 up(0.0f, 1.0f, 0.0f);
+	glm::vec3 right   = glm::normalize(glm::cross(forward, up));
+	return pos + right * (float(lane) * m_laneWidth);
+}
+
+int Game::ComputeRacePosition()
+{
+	int position = 1;
+	for (int i = 0; i < 4; i++)
+		if (m_aiT[i] > m_t) position++;
+	return position;
+}
+
 // Update method runs repeatedly with the Render method
 void Game::Update() 
 {
@@ -419,31 +505,49 @@ void Game::Update()
 
 	//m_pCamera->Set(glm::vec3(0.0f, 300.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	
-	// Advance t along the path
-	m_t += 0.000125f * (float)m_dt;
-	if (m_t > 1.0f)
-		m_t = 0.0f;
+	// === Speed decay ===
+	m_playerSpeed -= m_speedDecayRate * (float)m_dt;
+	if (m_playerSpeed < m_baseSpeed) m_playerSpeed = m_baseSpeed;
 
-	glm::vec3 p0(25.0f, 20.0f, 130.0f);
-	glm::vec3 p1(55.0f, 20.0f, 100.0f);
-	glm::vec3 p2(25.0f, 20.0f, 70.0f);
-	glm::vec3 p3(-5.0f, 20.0f, 100.0f);
+	// === Advance player along track ===
+	m_t += m_playerSpeed * (float)m_dt;
+	if (m_t > 1.0f) m_t -= 1.0f;
 
-	float totalT = m_t * 4.0f;
-	int segment = (int)totalT % 4;
-	float localT = totalT - (int)totalT;
+	// === Advance AI horses ===
+	for (int i = 0; i < 4; i++) {
+		m_aiT[i] += m_aiSpeeds[i] * (float)m_dt;
+		if (m_aiT[i] > 1.0f) m_aiT[i] -= 1.0f;
+	}
 
-	glm::vec3 points[4] = { p0, p1, p2, p3 };
-	glm::vec3 a = points[(segment + 0) % 4];
-	glm::vec3 b = points[(segment + 1) % 4];
-	glm::vec3 c = points[(segment + 2) % 4];
-	glm::vec3 d = points[(segment + 3) % 4];
+	// === Flash timer ===
+	if (m_wrongInput) {
+		m_flashTimer -= (float)m_dt;
+		if (m_flashTimer <= 0.0f) m_wrongInput = false;
+	}
 
-	glm::vec3 cameraPosition = m_pCatmullRom->Interpolate(a, b, c, d, localT);
+	// === Lap timer ===
+	m_lapTime += (float)m_dt / 1000.0f;
 
-	glm::vec3 cubePosition(25.0f, 5.0f, 100.0f);
-	m_pCamera->Set(cameraPosition, cubePosition, glm::vec3(0.0f, 1.0f, 0.0f));
-	
+	// === Race position ===
+	m_racePosition = ComputeRacePosition();
+
+	// === Camera ===
+	glm::vec3 playerPos = GetLanePosition(m_t, m_playerLane);
+	float tAhead = m_t + 0.005f;
+	if (tAhead > 1.0f) tAhead -= 1.0f;
+	glm::vec3 ahead   = GetLanePosition(tAhead, m_playerLane);
+	glm::vec3 forward = glm::normalize(ahead - playerPos);
+	glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+	if (m_cameraMode == 0) {
+		m_pCamera->Set(playerPos, playerPos + forward * 10.0f, up);
+	} else if (m_cameraMode == 1) {
+		glm::vec3 camPos = playerPos - forward * 25.0f + up * 10.0f;
+		m_pCamera->Set(camPos, playerPos, up);
+	} else {
+		m_pCamera->Update(m_dt);
+	}
+
 	m_pAudio->Update();
 }
 
@@ -479,8 +583,27 @@ void Game::DisplayFrameRate()
 		glDisable(GL_DEPTH_TEST);
 		fontProgram->SetUniform("matrices.modelViewMatrix", glm::mat4(1));
 		fontProgram->SetUniform("matrices.projMatrix", m_pCamera->GetOrthographicProjectionMatrix());
-		fontProgram->SetUniform("vColour", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-		m_pFtFont->Render(20, height - 20, 20, "FPS: %d", m_framesPerSecond);
+
+		const char* placeStr[] = { "1st", "2nd", "3rd", "4th", "5th" };
+		const char* arrowStr[] = { "^", "v", "<", ">" };
+		glm::vec4 seqColour = m_wrongInput
+			? glm::vec4(1.0f, 0.2f, 0.2f, 1.0f)
+			: glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+		fontProgram->SetUniform("vColour", glm::vec4(1,1,1,1));
+		m_pFtFont->Render(20, height - 20,  20, "FPS: %d", m_framesPerSecond);
+		m_pFtFont->Render(20, height - 50,  20, "Place: %s", placeStr[m_racePosition - 1]);
+		m_pFtFont->Render(20, height - 80,  20, "Time:  %.1fs", m_lapTime);
+		m_pFtFont->Render(20, height - 110, 20, "Speed: %.0f%%",
+			(m_playerSpeed / m_boostSpeed) * 100.0f);
+
+		fontProgram->SetUniform("vColour", seqColour);
+		m_pFtFont->Render(20, height - 150, 28, "Seq: %s %s %s %s %s",
+			arrowStr[m_sequence[0]], arrowStr[m_sequence[1]], arrowStr[m_sequence[2]],
+			arrowStr[m_sequence[3]], arrowStr[m_sequence[4]]);
+
+		fontProgram->SetUniform("vColour", glm::vec4(1.0f, 0.85f, 0.0f, 1.0f));
+		m_pFtFont->Render(20, height - 185, 20, "Input: %d / 5", m_sequenceIndex);
 	}
 }
 
@@ -583,12 +706,36 @@ LRESULT Game::ProcessEvents(HWND window,UINT message, WPARAM w_param, LPARAM l_p
 		case VK_ESCAPE:
 			PostQuitMessage(0);
 			break;
+		case 'C':
+			m_cameraMode = (m_cameraMode + 1) % 3;
+			break;
 		case '1':
 			m_pAudio->PlayEventSound();
 			break;
 		case VK_F1:
 			m_pAudio->PlayEventSound();
 			break;
+		case VK_UP:
+		case VK_DOWN:
+		case VK_LEFT:
+		case VK_RIGHT:
+		{
+			int pressed = (w_param == VK_UP)   ? 0 :
+				          (w_param == VK_DOWN)  ? 1 :
+				          (w_param == VK_LEFT)  ? 2 : 3;
+			if (pressed == m_sequence[m_sequenceIndex]) {
+				m_sequenceIndex++;
+				if (m_sequenceIndex == 5) {
+					m_playerSpeed = m_boostSpeed;
+					GenerateSequence();
+				}
+			} else {
+				m_sequenceIndex = 0;
+				m_wrongInput    = true;
+				m_flashTimer    = 300.0f;
+			}
+			break;
+		}
 		}
 		break;
 

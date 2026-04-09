@@ -45,6 +45,27 @@ private:
 	int m_framesPerSecond;
 	bool m_appActive;
 	float m_t;
+	int m_cameraMode;
+
+	// === Race system ===
+	float m_playerSpeed;
+	float m_baseSpeed;
+	float m_boostSpeed;
+	float m_speedDecayRate;
+
+	float m_aiT[4];
+	float m_aiSpeeds[4];
+	int   m_aiLanes[4];
+
+	int   m_sequence[5];
+	int   m_sequenceIndex;
+	bool  m_wrongInput;
+	float m_flashTimer;
+
+	float m_lapTime;
+	int   m_racePosition;
+	int   m_playerLane;
+	float m_laneWidth;
 
 
 public:
@@ -59,10 +80,12 @@ private:
 	static const int FPS = 60;
 	void DisplayFrameRate();
 	void GameLoop();
+	void GenerateSequence();
+	glm::vec3 GetLanePosition(float t, int lane);
+	int ComputeRacePosition();
 	GameWindow m_gameWindow;
 	HINSTANCE m_hInstance;
 	int m_frameCount;
 	double m_elapsedTime;
-
 
 };
