@@ -142,6 +142,7 @@
     <ClInclude Include="Texture.h" />
     <ClInclude Include="VertexBufferObject.h" />
     <ClInclude Include="VertexBufferObjectIndexed.h" />
+    <ClInclude Include="Cylinder.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Audio.cpp" />
@@ -162,6 +163,7 @@
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="VertexBufferObject.cpp" />
     <ClCompile Include="VertexBufferObjectIndexed.cpp" />
+    <ClCompile Include="BasicShapes\Cylinder.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cubeShader.frag" />
@@ -170,6 +172,8 @@
     <None Include="resources\shaders\mainShader.vert" />
     <None Include="resources\shaders\textShader.frag" />
     <None Include="resources\shaders\textShader.vert" />
+    <None Include="Shaders\toonShader.frag" />
+    <None Include="Shaders\toonShader.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

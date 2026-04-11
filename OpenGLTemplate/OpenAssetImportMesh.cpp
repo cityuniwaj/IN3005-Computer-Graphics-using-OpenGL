@@ -17,6 +17,7 @@
 */
 
 #include <assert.h>
+#include <fstream>
 #include "OpenAssetImportMesh.h"
 
 #pragma comment(lib, "lib/assimp.lib")
@@ -165,27 +166,31 @@ bool COpenAssetImportMesh::InitMaterials(const aiScene* pScene, const std::strin
         const aiMaterial* pMaterial = pScene->mMaterials[i];
 
         m_Textures[i] = NULL;
+        bool hasDiffuseTexture = (pMaterial->GetTextureCount(aiTextureType_DIFFUSE) > 0);
 
-        if (pMaterial->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+        if (hasDiffuseTexture) {
             aiString Path;
 
 			if (pMaterial->GetTexture(aiTextureType_DIFFUSE, 0, &Path, NULL, NULL, NULL, NULL, NULL) == AI_SUCCESS) {
                 std::string FullPath = Dir + "\\" + Path.data;
-                m_Textures[i] = new CTexture();
-                if (!m_Textures[i]->Load(FullPath, true)) {
- 					MessageBox(NULL, FullPath.c_str(), "Error loading mesh texture", MB_ICONHAND);
-                    delete m_Textures[i];
-                    m_Textures[i] = NULL;
-                    Ret = false;
-                }
-                else {
-                    printf("Loaded texture '%s'\n", FullPath.c_str());
+
+                std::ifstream textureFile(FullPath.c_str());
+                if (textureFile.good()) {
+                    m_Textures[i] = new CTexture();
+                    if (!m_Textures[i]->Load(FullPath, true)) {
+                        delete m_Textures[i];
+                        m_Textures[i] = NULL;
+                        Ret = false;
+                    }
+                    else {
+                        printf("Loaded texture '%s'\n", FullPath.c_str());
+                    }
                 }
             }
         }
 
-        // Load a single colour texture matching the diffuse colour if no texture added
-        if (!m_Textures[i]) {
+        // Load a single colour texture matching the diffuse colour if no texture added and no diffuse texture file is expected
+        if (!m_Textures[i] && !hasDiffuseTexture) {
 		
 			aiColor3D color (0.f,0.f,0.f);
 			pMaterial->Get(AI_MATKEY_COLOR_DIFFUSE,color);

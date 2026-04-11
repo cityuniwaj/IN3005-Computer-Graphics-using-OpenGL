@@ -2,6 +2,7 @@
 
 #include "Common.h"
 #include "GameWindow.h"
+#include "Texture.h"
 
 // Classes used in game.  For a new class, declare it here and provide a pointer to an object of this class below.  Then, in Game.cpp, 
 // include the header.  In the Game constructor, set the pointer to NULL and in Game::Initialise, create a new object.  Don't forget to 
@@ -18,6 +19,8 @@ class COpenAssetImportMesh;
 class CAudio;
 class CCatmullRom;
 class CCube;
+class CCylinder;
+class CTexture;
 
 class Game {
 private:
@@ -34,11 +37,16 @@ private:
 	CFreeTypeFont *m_pFtFont;
 	COpenAssetImportMesh *m_pBarrelMesh;
 	COpenAssetImportMesh *m_pHorseMesh;
+	COpenAssetImportMesh *m_pFenceMesh;
+	COpenAssetImportMesh *m_pRedArrowMesh;
+	COpenAssetImportMesh *m_pGreenArrowMesh;
 	CSphere *m_pSphere;
 	CHighResolutionTimer *m_pHighResolutionTimer;
 	CAudio *m_pAudio;
 	CCatmullRom *m_pCatmullRom;
 	CCube *m_pCube;
+	CCylinder *m_pCylinder;
+	CTexture m_woodTexture;
 
 	// Some other member variables
 	double m_dt;
@@ -66,7 +74,13 @@ private:
 	int   m_racePosition;
 	int   m_playerLane;
 	float m_laneWidth;
-
+	float m_lightAngle;
+	static const int   BARREL_COUNT = 8;
+	float  m_barrelT[BARREL_COUNT];    // t-positions of barrels on track
+	float  m_jumpHeight;               // current vertical offset of player
+	float  m_jumpVelocity;             // current upward velocity
+	bool   m_isJumping;
+	int    m_score;                    // increases each barrel successfully passed
 
 public:
 	Game();

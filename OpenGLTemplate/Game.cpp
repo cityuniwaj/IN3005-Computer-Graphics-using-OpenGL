@@ -40,9 +40,11 @@ Source code drawn from a number of sources and examples, including contributions
 #include "MatrixStack.h"
 #include "OpenAssetImportMesh.h"
 #include "Audio.h"
+#include "Texture.h"
 
 #include "CatmullRom.h"
 #include "Cube.h"
+#include "Cylinder.h"
 
 // Constructor
 Game::Game()
@@ -54,11 +56,15 @@ Game::Game()
 	m_pFtFont = NULL;
 	m_pBarrelMesh = NULL;
 	m_pHorseMesh = NULL;
+	m_pFenceMesh = NULL;
+	m_pRedArrowMesh  = NULL;
+	m_pGreenArrowMesh = NULL;
 	m_pSphere = NULL;
 	m_pHighResolutionTimer = NULL;
 	m_pAudio = NULL;
 	m_pCatmullRom = NULL;
 	m_pCube = NULL;
+	m_pCylinder = NULL;
 
 	m_dt = 0.0;
 	m_framesPerSecond = 0;
@@ -66,6 +72,11 @@ Game::Game()
 	m_elapsedTime = 0.0f;
 	m_t = 0.0f;
 	m_cameraMode = 0;
+	m_lightAngle = 0.0f;
+	m_jumpHeight   = 0.0f;
+	m_jumpVelocity = 0.0f;
+	m_isJumping    = false;
+	m_score        = 0;
 }
 
 // Destructor
@@ -78,10 +89,14 @@ Game::~Game()
 	delete m_pFtFont;
 	delete m_pBarrelMesh;
 	delete m_pHorseMesh;
+	delete m_pFenceMesh;
+	delete m_pRedArrowMesh;
+	delete m_pGreenArrowMesh;
 	delete m_pSphere;
 	delete m_pAudio;
 	delete m_pCatmullRom;
 	delete m_pCube;
+	delete m_pCylinder;
 
 	if (m_pShaderPrograms != NULL) {
 		for (unsigned int i = 0; i < m_pShaderPrograms->size(); i++)
@@ -112,26 +127,27 @@ void Game::Initialise()
 	m_pAudio = new CAudio;
 	m_pCatmullRom = new CCatmullRom;
 	m_pCube = new CCube;
+	m_pCylinder = new CCylinder;
 
 	// Catmull-Rom spline path
-	glm::vec3 p0 = glm::vec3(25.0f, 20.0f, 130.0f);
-	glm::vec3 p1 = glm::vec3(55.0f, 20.0f, 100.0f);
-	glm::vec3 p2 = glm::vec3(25.0f, 20.0f, 70.0f);
-	glm::vec3 p3 = glm::vec3(-5.0f, 20.0f, 100.0f);
+	glm::vec3 p0 = glm::vec3(     0.0f, 20.0f,  12000.0f);
+	glm::vec3 p1 = glm::vec3( 12000.0f, 20.0f,      0.0f);
+	glm::vec3 p2 = glm::vec3(     0.0f, 20.0f, -12000.0f);
+	glm::vec3 p3 = glm::vec3(-12000.0f, 20.0f,      0.0f);
 	m_pCatmullRom->CreatePath(p0, p1, p2, p3);
 
 	// === Race setup ===
-	m_baseSpeed      = 0.0001f;
-	m_boostSpeed     = 0.00022f;
+	m_baseSpeed      = 0.0000140f;
+	m_boostSpeed     = 0.0000230f;
 	m_playerSpeed    = m_baseSpeed;
-	m_speedDecayRate = 0.000000025f;
+	m_speedDecayRate = 0.00000000325f;
 	m_playerLane     = 0;
-	m_laneWidth      = 6.0f;
+	m_laneWidth      = 400.0f;
 
-	m_aiT[0] = 0.005f;  m_aiSpeeds[0] = 0.000130f;  m_aiLanes[0] = -2;
-	m_aiT[1] = 0.010f;  m_aiSpeeds[1] = 0.000115f;  m_aiLanes[1] = -1;
-	m_aiT[2] = 0.003f;  m_aiSpeeds[2] = 0.000125f;  m_aiLanes[2] =  1;
-	m_aiT[3] = 0.007f;  m_aiSpeeds[3] = 0.000120f;  m_aiLanes[3] =  2;
+	m_aiT[0] = 0.005f;  m_aiSpeeds[0] = 0.0000180f;  m_aiLanes[0] = -2;
+	m_aiT[1] = 0.010f;  m_aiSpeeds[1] = 0.0000160f;  m_aiLanes[1] = -1;
+	m_aiT[2] = 0.003f;  m_aiSpeeds[2] = 0.0000175f;  m_aiLanes[2] =  1;
+	m_aiT[3] = 0.007f;  m_aiSpeeds[3] = 0.0000165f;  m_aiLanes[3] =  2;
 
 	m_sequenceIndex = 0;
 	m_wrongInput    = false;
@@ -141,6 +157,9 @@ void Game::Initialise()
 
 	srand((unsigned int)time(NULL));
 	GenerateSequence();
+	// Spread 8 barrels evenly around the track in the player's lane
+	for (int i = 0; i < BARREL_COUNT; i++)
+		m_barrelT[i] = (float)(i + 1) / (float)(BARREL_COUNT + 1);
 
 	RECT dimensions = m_gameWindow.GetDimensions();
 
@@ -149,7 +168,7 @@ void Game::Initialise()
 
 	// Set the orthographic and perspective projection matrices based on the image size
 	m_pCamera->SetOrthographicProjectionMatrix(width, height); 
-	m_pCamera->SetPerspectiveProjectionMatrix(45.0f, (float) width / (float) height, 0.5f, 5000.0f);
+	m_pCamera->SetPerspectiveProjectionMatrix(45.0f, (float)width / (float)height, 0.5f, 100000.0f);
 
 	// Load shaders
 	vector<CShader> shShaders;
@@ -161,6 +180,8 @@ void Game::Initialise()
 
 	sShaderFileNames.push_back("cubeShader.vert");
 	sShaderFileNames.push_back("cubeShader.frag");
+	sShaderFileNames.push_back("toonShader.vert");
+	sShaderFileNames.push_back("toonShader.frag");
 
 	for (int i = 0; i < (int) sShaderFileNames.size(); i++) {
 		string sExt = sShaderFileNames[i].substr((int) sShaderFileNames[i].size()-4, 4);
@@ -171,7 +192,10 @@ void Game::Initialise()
 		else if (sExt == "tcnl") iShaderType = GL_TESS_CONTROL_SHADER;
 		else iShaderType = GL_TESS_EVALUATION_SHADER;
 		CShader shader;
-		shader.LoadShader("resources\\shaders\\"+sShaderFileNames[i], iShaderType);
+		string sShaderPath = (sShaderFileNames[i].find("toonShader") == 0)
+			? "Shaders\\" + sShaderFileNames[i]
+			: "resources\\shaders\\" + sShaderFileNames[i];
+		shader.LoadShader(sShaderPath, iShaderType);
 		shShaders.push_back(shader);
 	}
 
@@ -199,14 +223,20 @@ void Game::Initialise()
 	pCubeProgram->LinkProgram();
 	m_pShaderPrograms->push_back(pCubeProgram);
 
-	// You can follow this pattern to load additional shaders
+	// Create toon shader program
+	CShaderProgram *pToonProgram = new CShaderProgram;
+	pToonProgram->CreateProgram();
+	pToonProgram->AddShaderToProgram(&shShaders[6]);
+	pToonProgram->AddShaderToProgram(&shShaders[7]);
+	pToonProgram->LinkProgram();
+	m_pShaderPrograms->push_back(pToonProgram);
 
 	// Create the skybox
 	// Skybox downloaded from http://www.akimbo.in/forum/viewtopic.php?f=10&t=9
-	m_pSkybox->Create(2500.0f);
+	m_pSkybox->Create(50000.0f);
 	
 	// Create the planar terrain
-	m_pPlanarTerrain->Create("resources\\textures\\", "grassfloor01.jpg", 2000.0f, 2000.0f, 50.0f); // Texture downloaded from http://www.psionicgames.com/?page_id=26 on 24 Jan 2013
+	m_pPlanarTerrain->Create("resources\\textures\\", "grassfloor01.jpg", 40000.0f, 40000.0f, 50.0f); // Texture downloaded from http://www.psionicgames.com/?page_id=26 on 24 Jan 2013
 
 	m_pFtFont->LoadSystemFont("arial.ttf", 32);
 	m_pFtFont->SetShaderProgram(pFontProgram);
@@ -214,6 +244,13 @@ void Game::Initialise()
 	// Load some meshes in OBJ format
 	m_pBarrelMesh->Load("resources\\models\\Barrel\\Barrel02.obj");  // Downloaded from http://www.psionicgames.com/?page_id=24 on 24 Jan 2013
 	m_pHorseMesh->Load("resources\\models\\Horse\\Horse2.obj");  // Downloaded from http://opengameart.org/content/horse-lowpoly on 24 Jan 2013
+	m_pFenceMesh = new COpenAssetImportMesh;
+	m_pFenceMesh->Load("resources\\models\\Fence\\fence.obj"); // Downloaded from https://sketchfab.com/3d-models/wood-fence-aac4aefc4cf848178ca2bb3a03cacb35 on 30 March 2026
+	m_pRedArrowMesh = new COpenAssetImportMesh;
+	m_pRedArrowMesh->Load("resources\\models\\Arrows\\red arrow.obj");
+	m_pGreenArrowMesh = new COpenAssetImportMesh;
+	m_pGreenArrowMesh->Load("resources\\models\\Arrows\\green arrow.obj");
+	m_woodTexture.Load("resources\\textures\\wood.jpg");
 
 	// Create a sphere
 	m_pSphere->Create("resources\\textures\\", "dirtpile01.jpg", 25, 25);  // Texture downloaded from http://www.psionicgames.com/?page_id=26 on 24 Jan 2013
@@ -224,9 +261,11 @@ void Game::Initialise()
 	m_pAudio->LoadEventSound("resources\\Audio\\Boing.wav");					// Royalty free sound from freesound.org
 	m_pAudio->LoadMusicStream("resources\\Audio\\DST-Garote.mp3");	// Royalty free music from http://www.nosoapradio.us/
 	m_pAudio->PlayMusicStream();
+	m_pAudio->SetMusicVolume(0.3f);
 
 	// Create a cube
 	m_pCube->Create("resources\\textures\\", "pog.jpg");
+	m_pCylinder->Create("resources\\textures\\", "wood.jpg", 1.0f, 1.0f, 16);
 }
 
 // Render method runs repeatedly in a loop
@@ -271,7 +310,36 @@ void Game::Render()
 	pMainProgram->SetUniform("material1.Md", glm::vec3(0.0f));	// Diffuse material reflectance
 	pMainProgram->SetUniform("material1.Ms", glm::vec3(0.0f));	// Specular material reflectance
 	pMainProgram->SetUniform("material1.shininess", 15.0f);		// Shininess material property
-		
+	pMainProgram->SetUniform("fogColour", glm::vec3(0.55f, 0.6f, 0.65f));
+	pMainProgram->SetUniform("fogStart",  1000.0f);
+	pMainProgram->SetUniform("fogEnd",    10000.0f);
+
+	// Dynamic orbiting light
+	float orbitRadius = 10000.0f;
+	float orbitHeight = 4000.0f;
+	glm::vec4 light2WorldPos(
+		orbitRadius * cos(m_lightAngle),
+		orbitHeight,
+		orbitRadius * sin(m_lightAngle),
+		1.0f
+	);
+	pMainProgram->SetUniform("light2.position", viewMatrix * light2WorldPos);
+
+	// Blend factor: 0.0 = base speed (natural white), 1.0 = full boost (golden)
+	float boostT = glm::clamp(
+		(m_playerSpeed - m_baseSpeed) / (m_boostSpeed - m_baseSpeed),
+		0.0f, 1.0f
+	);
+	glm::vec3 goldenAmbient(0.18f, 0.12f, 0.02f);
+	glm::vec3 goldenDiffuse(1.0f,  0.72f, 0.08f);
+	glm::vec3 goldenSpecular(1.0f, 0.92f, 0.45f);
+	glm::vec3 naturalAmbient(0.15f, 0.15f, 0.15f);
+	glm::vec3 naturalDiffuse(1.0f,  1.0f,  0.95f);
+	glm::vec3 naturalSpecular(1.0f, 1.0f,  1.0f);
+	pMainProgram->SetUniform("light2.La", glm::mix(naturalAmbient,  goldenAmbient,  boostT));
+	pMainProgram->SetUniform("light2.Ld", glm::mix(naturalDiffuse,  goldenDiffuse,  boostT));
+	pMainProgram->SetUniform("light2.Ls", glm::mix(naturalSpecular, goldenSpecular, boostT));
+
 
 	// Render the skybox and terrain with full ambient reflectance 
 	modelViewMatrixStack.Push();
@@ -299,52 +367,104 @@ void Game::Render()
 	pMainProgram->SetUniform("material1.Ms", glm::vec3(1.0f));	// Specular material reflectance	
 
 
-	// Render the horse 
-	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(0.0f, 20.0f, 130.0f));
-		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), 180.0f);
-		modelViewMatrixStack.Scale(2.5f);
-		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
-		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
-		m_pHorseMesh->Render();
-	modelViewMatrixStack.Pop();
-
-	// horse 2
-	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(55.0f, 20.0f, 85.0f));
-		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), 180.0f);
-		modelViewMatrixStack.Scale(2.5f);
-		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
-		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
-		m_pHorseMesh->Render();
-	modelViewMatrixStack.Pop();
-
-	// horse 3
-	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(-5.0f, 20.0f, 115.0f));
-		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), 180.0f);
-		modelViewMatrixStack.Scale(2.5f);
-		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
-		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
-		m_pHorseMesh->Render();
-	modelViewMatrixStack.Pop();
+	// Switch to toon shader for horses and barrels
+	CShaderProgram* pToonProgram = (*m_pShaderPrograms)[3];
+	pToonProgram->UseProgram();
+	pToonProgram->SetUniform("sampler0", 0);
+	pToonProgram->SetUniform("bUseTexture", true);
+	pToonProgram->SetUniform("matrices.projMatrix", m_pCamera->GetPerspectiveProjectionMatrix());
+	pToonProgram->SetUniform("light1.position", viewMatrix * glm::vec4(-100, 100, -100, 1));
+	pToonProgram->SetUniform("light1.La", glm::vec3(1.0f));
+	pToonProgram->SetUniform("light1.Ld", glm::vec3(1.0f));
+	pToonProgram->SetUniform("light1.Ls", glm::vec3(1.0f));
 
 	// Draw AI horses
 	for (int i = 0; i < 4; i++) {
 		glm::vec3 aiPos = GetLanePosition(m_aiT[i], m_aiLanes[i]);
 		float tA = m_aiT[i] + 0.005f;
 		if (tA > 1.0f) tA -= 1.0f;
-		glm::vec3 aiAhead   = GetLanePosition(tA, m_aiLanes[i]);
-		glm::vec3 aiForward = glm::normalize(aiAhead - aiPos);
-		float angle = glm::degrees(atan2(aiForward.x, aiForward.z));
+		glm::vec3 aiCenterNow = GetLanePosition(m_aiT[i], 0);
+		glm::vec3 aiCenterAhead = GetLanePosition(tA, 0);
+		glm::vec3 aiForward = glm::normalize(aiCenterAhead - aiCenterNow);
+		float aiAngle = atan2(aiForward.x, aiForward.z) + 1.570796f;
 
 		modelViewMatrixStack.Push();
 			modelViewMatrixStack.Translate(aiPos);
-			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), angle);
-			modelViewMatrixStack.Scale(2.5f);
-			pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
-			pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), aiAngle);
+			modelViewMatrixStack.Scale(62.5f);
+			pToonProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+			pToonProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 			m_pHorseMesh->Render();
+		modelViewMatrixStack.Pop();
+	}
+
+	for (int i = 0; i < BARREL_COUNT; i++) {
+		glm::vec3 barrelPos = GetLanePosition(m_barrelT[i], 0);
+		barrelPos.y += 20.0f;  // sit on track surface
+
+		modelViewMatrixStack.Push();
+		modelViewMatrixStack.Translate(barrelPos);
+		modelViewMatrixStack.Scale(187.5f);
+		pToonProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pToonProgram->SetUniform("matrices.normalMatrix",
+			m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		m_pBarrelMesh->Render();
+		modelViewMatrixStack.Pop();
+	}
+
+	glm::vec3 playerRenderPos = GetLanePosition(m_t, m_playerLane);
+	float tAhead = m_t + 0.005f;
+	if (tAhead > 1.0f) tAhead -= 1.0f;
+	glm::vec3 playerCenterNow = GetLanePosition(m_t, 0);
+	glm::vec3 playerCenterAhead = GetLanePosition(tAhead, 0);
+	glm::vec3 playerForward = glm::normalize(playerCenterAhead - playerCenterNow);
+	float playerAngle = atan2(playerForward.x, playerForward.z) + 1.570796f;
+
+	modelViewMatrixStack.Push();
+		modelViewMatrixStack.Translate(playerRenderPos + glm::vec3(0.0f, m_jumpHeight, 0.0f));
+		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), playerAngle);
+		modelViewMatrixStack.Scale(62.5f);
+		pToonProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pToonProgram->SetUniform("matrices.normalMatrix",
+			m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		m_pHorseMesh->Render();
+	modelViewMatrixStack.Pop();
+	pMainProgram->UseProgram();
+	pMainProgram->SetUniform("sampler0", 0);
+	pMainProgram->SetUniform("bUseTexture", true);
+
+	// Draw 5 sequence arrows floating above the track ahead of player
+	glm::vec3 arrowUp(0.0f, 1.0f, 0.0f);
+	glm::vec3 arrowCenter = playerRenderPos + playerForward * 1800.0f;
+	glm::vec3 arrowRight = glm::normalize(glm::cross(playerForward, arrowUp));
+	float arrowSplineAngle = atan2(playerForward.x, playerForward.z);
+
+	for (int i = 0; i < 5; i++) {
+		glm::vec3 arrowPos = arrowCenter + arrowRight * ((float)i - 2.0f) * 450.0f;
+
+		// Float above the track
+		arrowPos.y += 600.0f;
+
+		// Green if already inputted, red if not yet done
+		COpenAssetImportMesh* arrowMesh =
+			(i < m_sequenceIndex) ? m_pGreenArrowMesh : m_pRedArrowMesh;
+
+		// Current arrow to press is larger
+		float arrowScale = (i == m_sequenceIndex) ? 225.0f : 150.0f;
+
+		// Rotate arrow to show direction: UP=3.15, DOWN=0, LEFT=1.575, RIGHT=4.725
+		float dirAngles[] = { 3.15f, 0.0f, 1.575f, 4.725f };
+		float dirAngle = dirAngles[m_sequence[i]];
+
+		modelViewMatrixStack.Push();
+			modelViewMatrixStack.Translate(arrowPos);
+			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), arrowSplineAngle);
+			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 0.0f, 1.0f), dirAngle);
+			modelViewMatrixStack.Scale(arrowScale);
+			pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+			pMainProgram->SetUniform("matrices.normalMatrix",
+				m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+			arrowMesh->Render();
 		modelViewMatrixStack.Pop();
 	}
 
@@ -352,8 +472,8 @@ void Game::Render()
 	
 	// Render the barrel 
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(40.0f, 20.0f, 100.0f));
-		modelViewMatrixStack.Scale(5.0f);
+		modelViewMatrixStack.Translate(glm::vec3(  8000.0f, 20.0f,     0.0f));
+		modelViewMatrixStack.Scale(15.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		m_pBarrelMesh->Render();
@@ -361,8 +481,8 @@ void Game::Render()
 
 	// barrel 2
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(25.0f, 20.0f, 55.0f));
-		modelViewMatrixStack.Scale(5.0f);
+		modelViewMatrixStack.Translate(glm::vec3(     0.0f, 20.0f,  8000.0f));
+		modelViewMatrixStack.Scale(15.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		m_pBarrelMesh->Render();
@@ -370,17 +490,88 @@ void Game::Render()
 
 	// barrel 3
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(10.0f, 20.0f, 100.0f));
-		modelViewMatrixStack.Scale(5.0f);
+		modelViewMatrixStack.Translate(glm::vec3( -8000.0f, 20.0f,     0.0f));
+		modelViewMatrixStack.Scale(15.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		m_pBarrelMesh->Render();
 	modelViewMatrixStack.Pop();
-	
+
+	m_woodTexture.Bind(0);
+	const int fenceCount = 120;
+	for (int i = 0; i < fenceCount; i++) {
+		float t = (float)i / (float)fenceCount;
+		glm::vec3 outerFencePos = GetLanePosition(t, 5);
+		glm::vec3 innerFencePos = GetLanePosition(t, -5);
+		glm::vec3 centerPos = GetLanePosition(t, 0);
+
+		glm::vec3 outerToCenter = glm::normalize(centerPos - outerFencePos);
+		float outerFaceAngle = atan2(outerToCenter.x, outerToCenter.z) + 1.570796f;
+
+		glm::vec3 innerToCenter = glm::normalize(centerPos - innerFencePos);
+		float innerFaceAngle = atan2(innerToCenter.x, innerToCenter.z) + 1.570796f;
+
+		modelViewMatrixStack.Push();
+			modelViewMatrixStack.Translate(outerFencePos);
+			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), outerFaceAngle);
+			modelViewMatrixStack.Scale(187.5f);
+			pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+			pMainProgram->SetUniform("matrices.normalMatrix",
+				m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+			m_pFenceMesh->Render();
+		modelViewMatrixStack.Pop();
+
+		modelViewMatrixStack.Push();
+			modelViewMatrixStack.Translate(innerFencePos);
+			modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), innerFaceAngle);
+			modelViewMatrixStack.Scale(187.5f);
+			pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+			pMainProgram->SetUniform("matrices.normalMatrix",
+				m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+			m_pFenceMesh->Render();
+		modelViewMatrixStack.Pop();
+	}
+
+	const int postCount = 120;
+	for (int i = 0; i < postCount; i++) {
+		float t = (i + 0.5f) / (float)postCount;
+
+		glm::vec3 outerPostPos = GetLanePosition(t, 5);
+		float tAOuter = t + 0.005f; if (tAOuter > 1.0f) tAOuter -= 1.0f;
+		glm::vec3 outerPos2 = GetLanePosition(tAOuter, 5);
+		glm::vec3 outerFwd = glm::normalize(outerPos2 - outerPostPos);
+		float outerYAngle = atan2(outerFwd.x, outerFwd.z);
+
+		modelViewMatrixStack.Push();
+		modelViewMatrixStack.Translate(outerPostPos);
+		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), outerYAngle);
+		modelViewMatrixStack.Scale(glm::vec3(60.0f, 375.0f, 60.0f));
+		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pMainProgram->SetUniform("matrices.normalMatrix",
+			m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		m_pCylinder->Render();
+		modelViewMatrixStack.Pop();
+
+		glm::vec3 innerPostPos = GetLanePosition(t, -5);
+		float tAInner = t + 0.005f; if (tAInner > 1.0f) tAInner -= 1.0f;
+		glm::vec3 innerPos2 = GetLanePosition(tAInner, -5);
+		glm::vec3 innerFwd = glm::normalize(innerPos2 - innerPostPos);
+		float innerYAngle = atan2(innerFwd.x, innerFwd.z);
+
+		modelViewMatrixStack.Push();
+		modelViewMatrixStack.Translate(innerPostPos);
+		modelViewMatrixStack.Rotate(glm::vec3(0.0f, 1.0f, 0.0f), innerYAngle);
+		modelViewMatrixStack.Scale(glm::vec3(60.0f, 375.0f, 60.0f));
+		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
+		pMainProgram->SetUniform("matrices.normalMatrix",
+			m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
+		m_pCylinder->Render();
+		modelViewMatrixStack.Pop();
+	}
 
 	// Render the sphere
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(25.0f, 20.0f, 110.0f));
+		modelViewMatrixStack.Translate(glm::vec3(0.0f, 20.0f, 11000.0f));
 		modelViewMatrixStack.Scale(2.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
@@ -391,21 +582,13 @@ void Game::Render()
 
 	// larger sphere
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(45.0f, 20.0f, 100.0f));
+		modelViewMatrixStack.Translate(glm::vec3( 11000.0f, 20.0f,     0.0f));
 		modelViewMatrixStack.Scale(2.0f);
 		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
 		// To turn off texture mapping and use the sphere colour only (currently white material), uncomment the next line
 		//pMainProgram->SetUniform("bUseTexture", false);
 		m_pSphere->Render();
-	modelViewMatrixStack.Pop();
-
-	// Render the Catmull-Rom spline path
-	modelViewMatrixStack.Push();
-		pMainProgram->SetUniform("bUseTexture", false);
-		pMainProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
-		pMainProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
-		m_pCatmullRom->RenderPath();
 	modelViewMatrixStack.Pop();
 
 	// Render the cube
@@ -423,7 +606,7 @@ void Game::Render()
 	pCubeProgram->SetUniform("material1.Ms", glm::vec3(1.0f));
 	pCubeProgram->SetUniform("material1.shininess", 200.0f);
 	modelViewMatrixStack.Push();
-		modelViewMatrixStack.Translate(glm::vec3(25.0f, 5.0f, 100.0f));
+		modelViewMatrixStack.Translate(glm::vec3(0.0f, 20.0f,0.0f));
 		modelViewMatrixStack.Scale(5.0f);
 		pCubeProgram->SetUniform("matrices.modelViewMatrix", modelViewMatrixStack.Top());
 		pCubeProgram->SetUniform("matrices.normalMatrix", m_pCamera->ComputeNormalMatrix(modelViewMatrixStack.Top()));
@@ -447,10 +630,10 @@ void Game::GenerateSequence()
 
 glm::vec3 Game::GetLanePosition(float t, int lane)
 {
-	glm::vec3 p0(25.0f, 20.0f, 130.0f);
-	glm::vec3 p1(55.0f, 20.0f, 100.0f);
-	glm::vec3 p2(25.0f, 20.0f,  70.0f);
-	glm::vec3 p3(-5.0f, 20.0f, 100.0f);
+	glm::vec3 p0(     0.0f, 20.0f,  12000.0f);
+	glm::vec3 p1( 12000.0f, 20.0f,      0.0f);
+	glm::vec3 p2(     0.0f, 20.0f, -12000.0f);
+	glm::vec3 p3(-12000.0f, 20.0f,      0.0f);
 	glm::vec3 points[4] = { p0, p1, p2, p3 };
 
 	auto sampleSpline = [&](float sT) -> glm::vec3 {
@@ -482,35 +665,16 @@ int Game::ComputeRacePosition()
 	return position;
 }
 
-// Update method runs repeatedly with the Render method
 void Game::Update() 
-{
-	// Update the camera using the amount of time that has elapsed to avoid framerate dependent motion
-	//m_pCamera->Update(m_dt);
-
-	//static float t = 0.0f;
-	//t += 0.0005f * (float)m_dt;
-	//if (t > 1.0f)
-	//	t = 0.0f;
-
-	//glm::vec3 p0 = glm::vec3(-500.0f, 10.0f, -200.0f);
-	//glm::vec3 p1 = glm::vec3(0.0f, 10.0f, -200.0f);
-	//glm::vec3 p2 = glm::vec3(0.0f, 10.0f, 200.0f);
-	//glm::vec3 p3 = glm::vec3(-500.0f, 10.0f, 200.0f);
-
-	//CCatmullRom catmullRom;
-	//glm::vec3 cameraPosition = catmullRom.Interpolate(p0, p1, p2, p3, t);
-
-	//m_pCamera->Set(cameraPosition, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-	//m_pCamera->Set(glm::vec3(0.0f, 300.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-	
+{	
 	// === Speed decay ===
 	m_playerSpeed -= m_speedDecayRate * (float)m_dt;
 	if (m_playerSpeed < m_baseSpeed) m_playerSpeed = m_baseSpeed;
 
 	// === Advance player along track ===
 	m_t += m_playerSpeed * (float)m_dt;
+	m_lightAngle += (float)m_dt * 0.00065f;
+	if (m_lightAngle > glm::two_pi<float>()) m_lightAngle -= glm::two_pi<float>();
 	if (m_t > 1.0f) m_t -= 1.0f;
 
 	// === Advance AI horses ===
@@ -523,6 +687,43 @@ void Game::Update()
 	if (m_wrongInput) {
 		m_flashTimer -= (float)m_dt;
 		if (m_flashTimer <= 0.0f) m_wrongInput = false;
+	}
+
+	// === Jump physics ===
+	const float gravity      = 0.0014f;
+	const float jumpStrength = 0.55f;
+	if (m_isJumping) {
+		m_jumpVelocity -= gravity * (float)m_dt;
+		m_jumpHeight   += m_jumpVelocity * (float)m_dt;
+		if (m_jumpHeight <= 0.0f) {
+			m_jumpHeight   = 0.0f;
+			m_jumpVelocity = 0.0f;
+			m_isJumping    = false;
+		}
+	}
+
+	// === Barrel collision detection ===
+	glm::vec3 playerPosCol = GetLanePosition(m_t, m_playerLane);
+	playerPosCol.y += m_jumpHeight;
+	const float barrelCollisionRadius = 300.0f;
+	const float safeJumpHeight        = 200.0f;
+
+	for (int i = 0; i < BARREL_COUNT; i++) {
+		glm::vec3 barrelPos = GetLanePosition(m_barrelT[i], 0);
+		float dist = glm::length(glm::vec3(playerPosCol.x - barrelPos.x,
+										   0.0f,
+										   playerPosCol.z - barrelPos.z));
+		if (dist < barrelCollisionRadius && m_jumpHeight < safeJumpHeight) {
+			// Hit a barrel -- slow down and flash
+			m_playerSpeed  = m_baseSpeed * 0.75f;
+			m_wrongInput   = true;
+			m_flashTimer   = 500.0f;
+		}
+		// Award score when player passes a barrel safely (barrel is behind player)
+		float diff = m_t - m_barrelT[i];
+		if (diff > 0.005f && diff < 0.025f && m_jumpHeight >= safeJumpHeight) {
+			m_score++;
+		}
 	}
 
 	// === Lap timer ===
@@ -540,9 +741,10 @@ void Game::Update()
 	glm::vec3 up(0.0f, 1.0f, 0.0f);
 
 	if (m_cameraMode == 0) {
-		m_pCamera->Set(playerPos, playerPos + forward * 10.0f, up);
+		glm::vec3 fpPos = playerPos + up * 420.0f;
+		m_pCamera->Set(fpPos, fpPos + forward * 4000.0f, up);
 	} else if (m_cameraMode == 1) {
-		glm::vec3 camPos = playerPos - forward * 25.0f + up * 10.0f;
+		glm::vec3 camPos = playerPos - forward * 1500.0f + up * 600.0f;
 		m_pCamera->Set(camPos, playerPos, up);
 	} else {
 		m_pCamera->Update(m_dt);
@@ -555,19 +757,10 @@ void Game::Update()
 
 void Game::DisplayFrameRate()
 {
-
-
-	CShaderProgram *fontProgram = (*m_pShaderPrograms)[1];
-
-	RECT dimensions = m_gameWindow.GetDimensions();
-	int height = dimensions.bottom - dimensions.top;
-
 	// Increase the elapsed time and frame counter
 	m_elapsedTime += m_dt;
 	m_frameCount++;
 
-	// Now we want to subtract the current time by the last time that was stored
-	// to see if the time elapsed has been over a second, which means we found our FPS.
 	if (m_elapsedTime > 1000)
     {
 		m_elapsedTime = 0;
@@ -577,34 +770,40 @@ void Game::DisplayFrameRate()
 		m_frameCount = 0;
     }
 
-	if (m_framesPerSecond > 0) {
-		// Use the font shader program and render the text
-		fontProgram->UseProgram();
-		glDisable(GL_DEPTH_TEST);
-		fontProgram->SetUniform("matrices.modelViewMatrix", glm::mat4(1));
-		fontProgram->SetUniform("matrices.projMatrix", m_pCamera->GetOrthographicProjectionMatrix());
+	CShaderProgram *pFontProgram = (*m_pShaderPrograms)[1];
+	RECT dimensions = m_gameWindow.GetDimensions();
+	int width  = dimensions.right  - dimensions.left;
+	int height = dimensions.bottom - dimensions.top;
+	pFontProgram->UseProgram();
+	pFontProgram->SetUniform("matrices.modelViewMatrix", glm::mat4(1));
+	pFontProgram->SetUniform("matrices.projMatrix", m_pCamera->GetOrthographicProjectionMatrix());
+	pFontProgram->SetUniform("vColour", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+	glDisable(GL_DEPTH_TEST);
 
-		const char* placeStr[] = { "1st", "2nd", "3rd", "4th", "5th" };
-		const char* arrowStr[] = { "^", "v", "<", ">" };
-		glm::vec4 seqColour = m_wrongInput
-			? glm::vec4(1.0f, 0.2f, 0.2f, 1.0f)
-			: glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_pFtFont->Render(20, height - 40, 20, "FPS: %d", m_framesPerSecond);
 
-		fontProgram->SetUniform("vColour", glm::vec4(1,1,1,1));
-		m_pFtFont->Render(20, height - 20,  20, "FPS: %d", m_framesPerSecond);
-		m_pFtFont->Render(20, height - 50,  20, "Place: %s", placeStr[m_racePosition - 1]);
-		m_pFtFont->Render(20, height - 80,  20, "Time:  %.1fs", m_lapTime);
-		m_pFtFont->Render(20, height - 110, 20, "Speed: %.0f%%",
-			(m_playerSpeed / m_boostSpeed) * 100.0f);
+	int lapMins = (int)(m_lapTime / 60.0f);
+	float lapSecs = fmod(m_lapTime, 60.0f);
+	m_pFtFont->Render(20, height - 70, 20, "Time: %d:%04.1f", lapMins, lapSecs);
 
-		fontProgram->SetUniform("vColour", seqColour);
-		m_pFtFont->Render(20, height - 150, 28, "Seq: %s %s %s %s %s",
-			arrowStr[m_sequence[0]], arrowStr[m_sequence[1]], arrowStr[m_sequence[2]],
-			arrowStr[m_sequence[3]], arrowStr[m_sequence[4]]);
+	const char* suffixes[] = { "st", "nd", "rd", "th", "th" };
+	int posIndex = glm::clamp(m_racePosition - 1, 0, 4);
+	m_pFtFont->Render(20, height - 100, 20, "Position: %d%s", m_racePosition, suffixes[posIndex]);
 
-		fontProgram->SetUniform("vColour", glm::vec4(1.0f, 0.85f, 0.0f, 1.0f));
-		m_pFtFont->Render(20, height - 185, 20, "Input: %d / 5", m_sequenceIndex);
+	float boostPct = ((m_playerSpeed - m_baseSpeed) / (m_boostSpeed - m_baseSpeed)) * 100.0f;
+	boostPct = glm::clamp(boostPct, 0.0f, 100.0f);
+	m_pFtFont->Render(20, height - 130, 20, "Boost: %.0f%%", boostPct);
+
+	m_pFtFont->Render(20, height - 160, 20, "Sequence: %d/5", m_sequenceIndex);
+	m_pFtFont->Render(20, height - 190, 20, "Score: %d", m_score);
+
+	if (m_wrongInput) {
+		pFontProgram->SetUniform("vColour", glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+		m_pFtFont->Render(width / 2 - 60, height / 2, 40, "WRONG!");
+		pFontProgram->SetUniform("vColour", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
 	}
+
+	glEnable(GL_DEPTH_TEST);
 }
 
 // The game loop runs repeatedly until game over
@@ -647,7 +846,7 @@ WPARAM Game::Execute()
 	
 	MSG msg;
 
-	while(1) {													
+	while(1) {											
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) { 
 			if(msg.message == WM_QUIT) {
 				break;
@@ -715,14 +914,20 @@ LRESULT Game::ProcessEvents(HWND window,UINT message, WPARAM w_param, LPARAM l_p
 		case VK_F1:
 			m_pAudio->PlayEventSound();
 			break;
+		case VK_SPACE:
+			if (!m_isJumping) {
+				m_isJumping    = true;
+				m_jumpVelocity = 1.375f;
+			}
+			break;
 		case VK_UP:
 		case VK_DOWN:
 		case VK_LEFT:
 		case VK_RIGHT:
 		{
 			int pressed = (w_param == VK_UP)   ? 0 :
-				          (w_param == VK_DOWN)  ? 1 :
-				          (w_param == VK_LEFT)  ? 2 : 3;
+					          (w_param == VK_DOWN)  ? 1 :
+					          (w_param == VK_LEFT)  ? 2 : 3;
 			if (pressed == m_sequence[m_sequenceIndex]) {
 				m_sequenceIndex++;
 				if (m_sequenceIndex == 5) {

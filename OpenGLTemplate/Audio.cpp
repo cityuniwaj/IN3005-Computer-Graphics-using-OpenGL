@@ -75,6 +75,19 @@ bool CAudio::PlayMusicStream()
 	return true;
 }
 
+bool CAudio::SetMusicVolume(float volume)
+{
+	if (!m_musicChannel)
+		return false;
+
+	result = m_musicChannel->setVolume(volume);
+	FmodErrorCheck(result);
+	if (result != FMOD_OK)
+		return false;
+
+	return true;
+}
+
 // Check for error
 void CAudio::FmodErrorCheck(FMOD_RESULT result)
 {						

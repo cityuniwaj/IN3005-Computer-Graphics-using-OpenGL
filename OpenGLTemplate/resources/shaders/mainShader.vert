@@ -28,6 +28,7 @@ struct MaterialInfo
 
 // Lights and materials passed in as uniform variables from client programme
 uniform LightInfo light1; 
+uniform LightInfo light2;
 uniform MaterialInfo material1; 
 
 // Layout of vertex attributes in VBO
@@ -40,6 +41,7 @@ out vec3 vColour;	// Colour computed using reflectance model
 out vec2 vTexCoord;	// Texture coordinate
 
 out vec3 worldPosition;	// used for skybox
+out float vEyeDepth;
 
 // This function implements the Phong shading model
 // The code is based on the OpenGL 4.0 Shading Language Cookbook, Chapter 2, pp. 62 - 63, with a few tweaks. 
@@ -63,6 +65,22 @@ vec3 PhongModel(vec4 eyePosition, vec3 eyeNorm)
 
 }
 
+vec3 PhongModel2(vec4 eyePosition, vec3 eyeNorm)
+{
+    vec3 s = normalize(vec3(light2.position - eyePosition));
+    vec3 v = normalize(-eyePosition.xyz);
+    vec3 r = reflect(-s, eyeNorm);
+    vec3 n = eyeNorm;
+    vec3 ambient = light2.La * material1.Ma;
+    float sDotN = max(dot(s, n), 0.0f);
+    vec3 diffuse = light2.Ld * material1.Md * sDotN;
+    vec3 specular = vec3(0.0f);
+    float eps = 0.000001f;
+    if (sDotN > 0.0f)
+        specular = light2.Ls * material1.Ms * pow(max(dot(r, v), 0.0f), material1.shininess + eps);
+    return ambient + diffuse + specular;
+}
+
 // This is the entry point into the vertex shader
 void main()
 {	
@@ -76,11 +94,11 @@ void main()
 	// Get the vertex normal and vertex position in eye coordinates
 	vec3 vEyeNorm = normalize(matrices.normalMatrix * inNormal);
 	vec4 vEyePosition = matrices.modelViewMatrix * vec4(inPosition, 1.0f);
+	vEyeDepth = vEyePosition.z;
 		
 	// Apply the Phong model to compute the vertex colour
-	vColour = PhongModel(vEyePosition, vEyeNorm);
+	vColour = PhongModel(vEyePosition, vEyeNorm) + PhongModel2(vEyePosition, vEyeNorm);
 	
 	// Pass through the texture coordinate
 	vTexCoord = inCoord;
 } 
-	

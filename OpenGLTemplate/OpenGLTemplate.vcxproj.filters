@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -74,6 +74,9 @@
     <ClInclude Include="Cube.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Cylinder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Audio.cpp">
@@ -130,6 +133,9 @@
     <ClCompile Include="Cube.cpp">
       <Filter>Source Files\BasicShapes</Filter>
     </ClCompile>
+    <ClCompile Include="BasicShapes\Cylinder.cpp">
+      <Filter>Source Files\BasicShapes</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\mainShader.frag">
@@ -148,6 +154,12 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="cubeShader.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\toonShader.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\toonShader.vert">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

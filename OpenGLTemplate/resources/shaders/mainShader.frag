@@ -10,6 +10,10 @@ uniform samplerCube CubeMapTex;
 uniform bool bUseTexture;    // A flag indicating if texture-mapping should be applied
 uniform bool renderSkybox;
 in vec3 worldPosition;
+in float vEyeDepth;
+uniform vec3  fogColour;
+uniform float fogStart;
+uniform float fogEnd;
 
 
 void main()
@@ -28,6 +32,10 @@ void main()
 			vOutputColour = vTexColour*vec4(vColour, 1.0f);	// Combine object colour and texture 
 		else
 			vOutputColour = vec4(vColour, 1.0f);	// Just use the colour instead
+
+		float depth     = abs(vEyeDepth);
+		float fogFactor = clamp((fogEnd - depth) / (fogEnd - fogStart), 0.0f, 1.0f);
+		vOutputColour   = mix(vec4(fogColour, 1.0f), vOutputColour, fogFactor);
 	}
 	
 	
