@@ -192,10 +192,7 @@ void Game::Initialise()
 		else if (sExt == "tcnl") iShaderType = GL_TESS_CONTROL_SHADER;
 		else iShaderType = GL_TESS_EVALUATION_SHADER;
 		CShader shader;
-		string sShaderPath = (sShaderFileNames[i].find("toonShader") == 0)
-			? "Shaders\\" + sShaderFileNames[i]
-			: "resources\\shaders\\" + sShaderFileNames[i];
-		shader.LoadShader(sShaderPath, iShaderType);
+		shader.LoadShader("resources\\shaders\\" + sShaderFileNames[i], iShaderType);
 		shShaders.push_back(shader);
 	}
 
@@ -246,11 +243,11 @@ void Game::Initialise()
 	m_pHorseMesh->Load("resources\\models\\Horse\\Horse2.obj");  // Downloaded from http://opengameart.org/content/horse-lowpoly on 24 Jan 2013
 	m_pFenceMesh = new COpenAssetImportMesh;
 	m_pFenceMesh->Load("resources\\models\\Fence\\fence.obj"); // Downloaded from https://sketchfab.com/3d-models/wood-fence-aac4aefc4cf848178ca2bb3a03cacb35 on 30 March 2026
+	m_woodTexture.Load("resources\\textures\\wood.jpg"); // Downloaded from https://sketchfab.com/3d-models/wood-fence-aac4aefc4cf848178ca2bb3a03cacb35 on 30 March 2026, came with the model
 	m_pRedArrowMesh = new COpenAssetImportMesh;
-	m_pRedArrowMesh->Load("resources\\models\\Arrows\\red arrow.obj");
+	m_pRedArrowMesh->Load("resources\\models\\Arrows\\red arrow.obj"); // Downloaded from https://sketchfab.com/3d-models/simple-red-arrow-10d31661bb98445a9a8bf45c018682f4 on 1 April 2026
 	m_pGreenArrowMesh = new COpenAssetImportMesh;
-	m_pGreenArrowMesh->Load("resources\\models\\Arrows\\green arrow.obj");
-	m_woodTexture.Load("resources\\textures\\wood.jpg");
+	m_pGreenArrowMesh->Load("resources\\models\\Arrows\\green arrow.obj"); // Downloaded from https://sketchfab.com/3d-models/simple-red-arrow-10d31661bb98445a9a8bf45c018682f4 on 1 April 2026, edited in Blender to change colour to green
 
 	// Create a sphere
 	m_pSphere->Create("resources\\textures\\", "dirtpile01.jpg", 25, 25);  // Texture downloaded from http://www.psionicgames.com/?page_id=26 on 24 Jan 2013
